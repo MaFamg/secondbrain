@@ -4,6 +4,7 @@ import logo from './images/exxon_mobil_logo.png'
 import lucas_photo from './images/foto_lucas.jpg'
 import { Link, NavLink } from 'react-router-dom';
 import AppRoutes from './AppRoutes';
+import TopBar from './components/TopBar';
 
 function App() {
   return (
@@ -38,9 +39,15 @@ function App() {
           />
         </div>
       </Sidebar>
-      <div style={{ flex: 1, padding: '20px' }}>
-        {/* Place where routes are rendered */}
-        <AppRoutes />
+      {/* Content Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Top Bar */}
+          <TopBar />
+
+          {/* Main Content */}
+          <div style={{ flex: 1, width: '100%'}}>
+            <AppRoutes />
+          </div>
       </div>
     </div>
   );
