@@ -1,15 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import robot from '../images/robot.svg';
 import OpenAI from 'openai';
+import { format } from 'date-fns'; // Import the format function from date-fns
 
 function YourRole() {
   const openai = new OpenAI({ apiKey: 'sk-QwcC5Si3CS0YJYFUK6sQsFXr-AnUEk_sqaDOx-C3yeT3BlbkFJE8mwYj0Evqu7J6A01RcJNT9RBDwFA-TMAy2vc_rowA',dangerouslyAllowBrowser: true });
-  const [messages, setMessages] = useState([
-    { text: 'Hello! How can I help you today?', sender: 'Chatbot' },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [threadId, setThreadId] = useState('thread_re4EF1GHvTxshh5pW0DhHC4U'); // Replace with actual thread ID
+  //const [threadId, setThreadId] = useState('thread_re4EF1GHvTxshh5pW0DhHC4U'); // Replace with actual thread ID
   const assistantId = 'asst_3STlScrSjtv1pQXeOAQRBTpt'; // Replace with your assistant ID
+  const threadId = 'thread_re4EF1GHvTxshh5pW0DhHC4U';
+  const [loading, setLoading] = useState(false); // New state for loading
+
+  // Fetch the last 10 messages when the component loads
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        // Fetch messages from the thread
+        const responseMessages = await openai.beta.threads.messages.list(threadId);
+
+        // Sort messages by timestamp and pick the last 10
+        const sortedMessages = responseMessages.data
+          .slice()
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // Sort by creation time
+          .slice(-10); // Get the last 10 messages
+
+        // Map the data into a usable format
+        const formattedMessages = sortedMessages.map(message => ({
+          text: message.content[0]?.text?.value || "",
+          sender: message.role === "user" ? "You" : "Assistant",
+          created_at: message.created_at
+        }));
+
+        setMessages(formattedMessages); // Update state with formatted messages
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+      }
+    };
+
+    fetchMessages();
+  }, []); // Empty dependency array ensures this runs once on component mount
 
   // Function to handle message sending
   const handleSendMessage = async () => {
@@ -22,8 +52,9 @@ function YourRole() {
         });
 
         // Add User's message to the local state
-        setMessages([...messages, { text: inputText, sender: 'User' }]);
+        setMessages([...messages, { text: inputText, sender: 'You' , created_at: Date.now() / 1000}]);
         setInputText(''); // Clear the input field
+        setLoading(true);
 
         // Step 2: Create a Run to Get the Assistant's Response
         const run = await openai.beta.threads.runs.createAndPoll(threadId, {
@@ -35,6 +66,7 @@ function YourRole() {
         if (run.status === 'completed') {
           // Fetch the list of messages in the thread
           const responseMessages = await openai.beta.threads.messages.list(threadId);
+          setLoading(false);
           console.log('MENSAGENS DA THREAD' + JSON.stringify(responseMessages.data[0].content.text, null, 2))
 
           // // Find the latest assistant response
@@ -45,9 +77,11 @@ function YourRole() {
           if (responseMessages) {
             setMessages([
               ...messages,
-              { text: inputText, sender: 'User' },
-              { text: responseMessages.data[0].content[0].text.value, sender: 'Chatbot' },
+              { text: inputText, sender: 'You', created_at: Date.now() / 1000 },
+              { text: responseMessages.data[0].content[0].text.value, sender: 'Chatbot', created_at: Date.now() / 1000 },
             ]);
+
+            
           }
         } else {
           console.error('Run failed or is still in progress:', run.status);
@@ -57,6 +91,11 @@ function YourRole() {
       }
     }
   };
+
+    // Function to format the timestamp to MM-DD-YYYY
+    const formatDate = (timestamp) => {
+      return format(new Date(timestamp * 1000), 'MM-dd-yyyy'); // Convert timestamp to milliseconds and format the date
+    };
 
   return (
     <div style={containerStyles}>
@@ -80,15 +119,26 @@ function YourRole() {
                 key={index}
                 style={{
                   ...messageBubbleStyles,
-                  backgroundColor: message.sender === 'User' ? '#006ADC' : '#e1e1e1',
-                  color: message.sender === 'User' ? '#fff' : '#000',
+                  backgroundColor: message.sender === 'You' ? '#006ADC' : '#e1e1e1',
+                  color: message.sender === 'You' ? '#fff' : '#000',
+                  alignSelf: message.sender === "You" ? "flex-end" : "flex-start",
+                  textAlign: message.sender === "You" ? "left" : "left"
                 }}
               >
                 <p>
                   <strong>{message.sender}:</strong> {message.text}
                 </p>
+                {/* Render the timestamp */}
+                <small style={timestampStyles}>{formatDate(message.created_at)}</small>
               </div>
             ))}
+
+            {/* Show loading animation if still waiting for OpenAI response */}
+            {loading && (
+            <div style={messageBubbleStyles}>
+              <p><strong>Assistant: Loading</strong>...</p> {/* Display three dots */}
+            </div>
+            )}
           </div>
 
           {/* Input Area */}
@@ -175,18 +225,24 @@ const messagesAreaStyles = {
   flex: 1,
   overflowY: 'scroll',
   padding: '10px',
+  display: 'flex',
+  flexDirection: 'column', // Aligns messages vertically
+  gap: '10px', // Optional: adds consistent spacing between bubbles
   border: '1px solid #ddd',
   borderRadius: '8px',
-  marginBottom: '20px',
   backgroundColor: '#f5f5f5',
 };
 
 // Individual Message Bubble Styles
 const messageBubbleStyles = {
-  marginBottom: '0px',
-  padding: '5px',
+  marginRight: '2px',
+  marginBottom: '15px',
+  padding: '10px',
   borderRadius: '8px',
   maxWidth: '70%',
+  minWidth: '30%',
+  whiteSpace: 'pre-wrap', // Preserva quebras de linha
+  wordWrap: 'break-word', // Quebra palavras longas para não estourar o container
 };
 
 // Input Area for Typing Message
@@ -198,8 +254,10 @@ const inputAreaStyles = {
 
 const inputStyles = {
   width: '85%',
+  height: '40%',
+  overflowY: 'scroll',
   padding: '10px',
-  borderRadius: '4px',
+  borderRadius: '6px',
   border: '1px solid #ccc',
   fontSize: '16px',
 };
@@ -233,6 +291,13 @@ const rightSideTitleStyles = {
   fontSize: '24px',
   fontWeight: 'bold',
   textAlign: 'center',
+};
+
+// Small timestamp label style
+const timestampStyles = {
+  fontSize: '12px',
+  color: '#888',
+  marginTop: '5px',
 };
 
 export default YourRole;
